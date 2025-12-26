@@ -29,6 +29,7 @@ class IncrementalPCA:
         self.components_ = None  # Principal components (k, n_features)
         self.singular_values_ = None  # Singular values
         self.n_samples_seen_ = 0
+        self.total_variance_ = None  # Total variance (for explained_variance_ratio)
         
     def fit(self, X):
         """
@@ -60,6 +61,9 @@ class IncrementalPCA:
             k = min(self.n_components, len(S))
         else:
             k = len(S)
+        
+        # Store total variance (from all singular values, not just kept ones)
+        self.total_variance_ = np.sum(S ** 2) / (n_samples - 1)
             
         self.components_ = Vt[:k]
         self.singular_values_ = S[:k]
@@ -117,6 +121,13 @@ class IncrementalPCA:
             
         m = X_new.shape[0]
         k = len(self.singular_values_)
+        
+        # Update total variance estimate
+        # Total variance is approximately the sum of squared Frobenius norms
+        if self.total_variance_ is not None:
+            old_total_var = self.total_variance_ * (self.n_samples_seen_ - 1)
+            new_var = np.sum(X_new ** 2)
+            self.total_variance_ = (old_total_var + new_var) / (self.n_samples_seen_ + m - 1)
         
         # Current SVD gives us the principal directions
         # V = components_.T is (n_features, k)
@@ -244,9 +255,14 @@ class IncrementalPCA:
         Returns:
         --------
         explained_variance_ratio : array-like, shape (n_components,)
-            Proportion of variance explained by each component
+            Proportion of variance explained by each component relative to total variance
         """
         explained_variance = self.get_explained_variance()
-        total_variance = np.sum(explained_variance)
-        return explained_variance / total_variance if total_variance > 0 else explained_variance
+        
+        if self.total_variance_ is not None and self.total_variance_ > 0:
+            return explained_variance / self.total_variance_
+        else:
+            # Fallback: normalize by sum of kept components
+            total_variance = np.sum(explained_variance)
+            return explained_variance / total_variance if total_variance > 0 else explained_variance
 

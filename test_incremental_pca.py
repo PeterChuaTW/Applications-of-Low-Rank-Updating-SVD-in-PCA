@@ -130,9 +130,12 @@ def test_explained_variance():
     assert len(variance_ratio) == 10, "Wrong number of variance ratio values"
     assert np.all(variance >= 0), "Variance should be non-negative"
     assert np.all(variance_ratio >= 0) and np.all(variance_ratio <= 1), "Variance ratio should be in [0, 1]"
-    assert np.abs(np.sum(variance_ratio) - 1.0) < 0.01, "Variance ratios should sum to ~1.0"
     
-    print(f"  Total explained variance ratio: {np.sum(variance_ratio):.4f}")
+    # Since we're keeping only 10 out of 20 possible components, the sum should be less than 1.0
+    total_ratio = np.sum(variance_ratio)
+    assert 0 < total_ratio <= 1.0, f"Total variance ratio should be in (0, 1], got {total_ratio}"
+    
+    print(f"  Total explained variance ratio: {total_ratio:.4f}")
     print("  ✓ Explained variance calculations correct")
 
 
