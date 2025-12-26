@@ -141,6 +141,22 @@ The implementation compares methods using:
 - **Mean Squared Error**: Average squared error per element
 - **Speedup**: Relative performance comparison
 
+### Important Notes on Accuracy
+
+The incremental PCA implementation using Brand's algorithm provides approximate results that may differ from batch PCA due to:
+
+1. **Incremental Mean Updates**: The mean is updated incrementally, which means early batches are centered with a different mean than later batches.
+2. **Numerical Accumulation**: With many incremental updates, small numerical errors can accumulate.
+3. **Initial Batch Size**: The first batch establishes the initial SVD basis, so using a very small initial batch can affect final accuracy.
+
+**Trade-off**: Incremental PCA prioritizes:
+- ✅ **Speed**: 2-3x faster than batch PCA
+- ✅ **Memory efficiency**: Processes data in small batches
+- ✅ **Online learning**: Can update model as new data arrives
+- ⚠️ **Approximate results**: Components may differ from batch PCA but still capture variance structure
+
+For applications requiring exact PCA results, use batch PCA. For large-scale or streaming applications where speed and memory efficiency are critical, incremental PCA is preferred.
+
 ## Example Output
 
 ```
