@@ -41,6 +41,19 @@ This will:
 3. Perform Batch PCA for comparison
 4. Display timing and reconstruction error metrics
 
+### Visualization
+
+Generate visualizations comparing incremental and batch PCA:
+
+```bash
+python visualize.py
+```
+
+This creates three PNG files:
+- `explained_variance.png` - Variance explained by each component
+- `principal_components.png` - First few principal components (eigenfaces)
+- `reconstructions.png` - Original vs reconstructed images
+
 ### Using the API
 
 ```python
@@ -77,8 +90,11 @@ batch_pca.fit(faces)
 │   ├── utils.py              # Utilities for benchmarking and error calculation
 │   └── data_loader.py        # ORL Face Database loading utilities
 ├── data/
+│   ├── README.md             # Data directory documentation
 │   └── ORL_Faces/            # ORL Face Database (place images here)
 ├── main.py                   # Main demonstration script
+├── visualize.py              # Visualization script
+├── test_incremental_pca.py   # Unit tests
 ├── requirements.txt          # Python dependencies
 └── README.md                 # This file
 ```
