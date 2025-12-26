@@ -11,6 +11,10 @@ class IncrementalPCA:
     This implementation allows for incremental updates to the PCA model
     as new data samples arrive, without recomputing the entire SVD.
     
+    Reference:
+    Brand, M. (2006). "Fast low-rank modifications of the thin singular 
+    value decomposition". ACM Transactions on Graphics, 25(2), 349-357.
+    
     Note: For PCA, we want principal components in feature space.
     We store the singular vectors of X^T @ X (covariance matrix).
     """
@@ -53,6 +57,7 @@ class IncrementalPCA:
         # U: (n_samples, min(n_samples, n_features))
         # S: (min(n_samples, n_features),)
         # Vt: (min(n_samples, n_features), n_features)
+        # Note: full_matrices=False gives Thin SVD (required for memory efficiency)
         U, S, Vt = np.linalg.svd(X_centered, full_matrices=False)
         
         # Principal components are rows of Vt (or columns of V)
@@ -87,13 +92,14 @@ class IncrementalPCA:
             return self.fit(X)
             
         n_new_samples, n_features = X.shape
-        
-        # Update mean incrementally
         n_total = self.n_samples_seen_ + n_new_samples
+        
+        # CRITICAL FIX: Compute new global mean FIRST
+        # All data must be centered with the same mean for SVD math to work
         new_mean = (self.n_samples_seen_ * self.mean_ + np.sum(X, axis=0)) / n_total
         
-        # Center new data with current mean (before updating)
-        X_centered = X - self.mean_
+        # Center new data with NEW global mean (not old mean!)
+        X_centered = X - new_mean
         
         # Apply Brand's algorithm for SVD updating
         self._brand_update(X_centered)
@@ -108,8 +114,15 @@ class IncrementalPCA:
         """
         Brand's algorithm for low-rank SVD updating.
         
-        We maintain: A^T @ A ≈ V @ diag(S^2) @ V^T
-        where V = components_^T (n_features x k)
+        Given current SVD approximation and new centered data X_new,
+        update the SVD without full recomputation.
+        
+        Algorithm (Brand 2006):
+        1. Project new data onto current basis: w = V^T @ X_new^T
+        2. Compute residual: p = X_new^T - V @ w
+        3. Orthonormalize residual: m, r = qr(p)
+        4. Form augmented matrix K and compute its SVD
+        5. Update U, Sigma, V using rotation matrices
         
         Parameters:
         -----------
@@ -119,58 +132,60 @@ class IncrementalPCA:
         if X_new.shape[0] == 0:
             return
             
-        m = X_new.shape[0]
-        k = len(self.singular_values_)
+        m = X_new.shape[0]  # Number of new samples
+        k = len(self.singular_values_)  # Current rank
         
         # Update total variance estimate
-        # Total variance is approximately the sum of squared Frobenius norms
         if self.total_variance_ is not None:
             old_total_var = self.total_variance_ * (self.n_samples_seen_ - 1)
             new_var = np.sum(X_new ** 2)
             self.total_variance_ = (old_total_var + new_var) / (self.n_samples_seen_ + m - 1)
         
-        # Current SVD gives us the principal directions
-        # V = components_.T is (n_features, k)
-        V = self.components_.T
-        S = self.singular_values_
+        # Current components: V is (n_features, k), stored as Vt which is (k, n_features)
+        # Brand's notation: V = components_.T
+        V = self.components_.T  # Shape: (n_features, k)
+        S = self.singular_values_  # Shape: (k,)
         
-        # Project new data onto current principal components
-        # P = X_new @ V  (m x k)
-        P = X_new @ V
+        # Step 1: Project new data onto current principal components
+        # Brand's notation: w = U^T @ c, but in PCA context:
+        # w = projection coefficients of X_new onto current basis V
+        w = X_new @ V  # Shape: (m, k)
         
-        # Compute residual
-        # R = X_new - P @ V^T  (m x n_features)
-        R = X_new - P @ V.T
+        # Step 2: Compute residual (part of X_new not captured by current PCs)
+        # Brand's notation: p = c - U @ w
+        p = X_new - w @ V.T  # Shape: (m, n_features)
         
-        # QR decomposition of R^T
-        # Q: (n_features, j), RR: (j, m)
-        Q, RR = np.linalg.qr(R.T, mode='reduced')
-        j = Q.shape[1]
+        # Step 3: QR decomposition of residual's transpose
+        # This is equivalent to Brand's normalized residual: m = p / ||p||
+        # QR gives us an orthonormal basis (m) and the norms (r)
+        # Note: We transpose p because QR expects (n_features, m)
+        m_basis, r = np.linalg.qr(p.T, mode='reduced')  # m_basis: (n_features, j), r: (j, m)
+        j = m_basis.shape[1]  # Number of new basis vectors
         
-        # Construct augmented matrix K
-        # K = [diag(S)   P^T  ]
-        #     [  0       RR   ]
-        # K: ((k+j) x (k+m))
+        # Step 4: Construct augmented core matrix K
+        # K represents the data in the augmented space [V, m_basis]
+        # K = [diag(S)   w^T  ]
+        #     [  0        r   ]
+        # Shape: (k+j, k+m)
         K = np.zeros((k + j, k + m))
-        K[:k, :k] = np.diag(S)
-        K[:k, k:] = P.T
-        K[k:, k:] = RR
+        K[:k, :k] = np.diag(S)  # Old singular values
+        K[:k, k:] = w.T         # Projection of new data
+        K[k:, k:] = r           # Residual norms
         
-        # SVD of K
+        # Step 5: SVD of core matrix K (much smaller than original data!)
+        # This is the key efficiency gain: K is (k+j) x (k+m), not n x N
         _, S_new, Vt_K = np.linalg.svd(K, full_matrices=False)
         
-        # Update principal components
-        # V_new = [V Q] @ U_K[:,:k_new]
-        # Where U_K are the left singular vectors of K (not returned, so use V)
-        # Actually we need: V_new^T = Vt_K[:k_new, :] @ [V^T; Q^T]
+        # Step 6: Update principal components
+        # New basis is a rotation of the augmented basis [V, m_basis]
+        # V_new^T = Vt_K @ [V^T; m_basis^T]
+        V_aug = np.vstack([V.T, m_basis.T])  # Shape: (k+j, n_features)
         
-        # Build augmented V matrix
-        V_aug = np.vstack([V.T, Q.T])  # (k+j, n_features)
-        
-        # New components
+        # Select top k_new components
         k_new = min(self.n_components, len(S_new)) if self.n_components else len(S_new)
-        components_new = Vt_K[:k_new, :k+j] @ V_aug  # (k_new, n_features)
+        components_new = Vt_K[:k_new, :k+j] @ V_aug  # Shape: (k_new, n_features)
         
+        # Update stored values
         self.components_ = components_new
         self.singular_values_ = S_new[:k_new]
         
@@ -195,6 +210,7 @@ class IncrementalPCA:
         X_centered = X - self.mean_
         
         # Project onto principal components
+        # components_ is (k, n_features), so we need transpose for projection
         return X_centered @ self.components_.T
         
     def inverse_transform(self, X_transformed):
@@ -216,7 +232,7 @@ class IncrementalPCA:
             
         X_transformed = np.array(X_transformed, dtype=np.float64)
         
-        # Reconstruct
+        # Reconstruct: X_centered = X_transformed @ components_
         X_centered = X_transformed @ self.components_
         
         # Add back the mean
@@ -265,4 +281,3 @@ class IncrementalPCA:
             # Fallback: normalize by sum of kept components
             total_variance = np.sum(explained_variance)
             return explained_variance / total_variance if total_variance > 0 else explained_variance
-
