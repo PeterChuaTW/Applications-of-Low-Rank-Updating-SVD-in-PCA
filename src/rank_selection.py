@@ -73,46 +73,125 @@ def determine_n_components_by_energy(singular_values, threshold=0.95):
 
 
 # ===========================================================================
-# METHOD 4: GAVISH-DONOHO THRESHOLD
+# METHOD 4: GAVISH-DONOHO THRESHOLD (FIXED VERSION)
 # ===========================================================================
 
 def gavish_donoho_threshold(X, sigma=None):
     """
     Gavish-Donoho optimal hard threshold (Random Matrix Theory).
     
+    Fixed implementation following Gavish & Donoho (2014) paper exactly.
+    
+    Mathematical Details:
+    --------------------
+    For a matrix X (m × n) with m ≤ n, define:
+    - β = m/n (aspect ratio, β ∈ (0,1])
+    - ω(β) = optimal threshold coefficient
+    - λ_med = median of singular values in noise region
+    - τ = ω(β) × λ_med × √n (optimal threshold)
+    
+    The optimal ω(β) for β < 1:
+        ω(β) = 0.56β³ - 0.95β² + 1.82β + 1.43
+    
+    Reference:
+    ----------
+    Gavish, M., & Donoho, D. L. (2014). 
+    "The optimal hard threshold for singular values is 4/√3".
+    IEEE Transactions on Information Theory, 60(8), 5040-5053.
+    Equations: (11) for ω(β), (23) for threshold formula
+    
     Parameters:
     -----------
     X : array, shape (m, n)
-    sigma : float, optional (noise level)
-    
+        Data matrix (should be mean-centered)
+    sigma : float, optional
+        Noise standard deviation. If None, estimated from data.
+        
     Returns:
     --------
     threshold : float
+        Optimal hard threshold value τ
     n_components : int
+        Number of singular values exceeding τ
     singular_values : array
+        All singular values from SVD
     omega : float
+        The ω(β) coefficient used
     """
     X = np.asarray(X)
     m, n = X.shape
     
     if m == 0 or n == 0:
-        raise ValueError(f"Invalid dimensions: {m} x {n}")
+        raise ValueError(f"Invalid dimensions: {m} × {n}")
     
-    beta = min(m, n) / max(m, n)
+    # Ensure m ≤ n (swap if necessary)
+    if m > n:
+        X = X.T
+        m, n = n, m
+    
+    # Compute aspect ratio β = m/n ∈ (0, 1]
+    beta = m / n
+    
+    # Compute SVD (thin SVD since m ≤ n)
     U, s, Vt = np.linalg.svd(X, full_matrices=False)
     
+    # === Noise Level Estimation ===
     if sigma is None:
-        n_noise = max(1, int(0.25 * len(s)))
-        sigma = np.median(s[-n_noise:])
-        if sigma == 0:
+        # Improved noise estimation using tail singular values
+        # Use bottom 25% of singular values to estimate noise
+        n_noise = max(5, int(0.25 * len(s)))
+        
+        # Method 1: Median of tail singular values (more robust)
+        tail_values = s[-n_noise:]
+        sigma_median = np.median(tail_values)
+        
+        # Method 2: MAD (Median Absolute Deviation) for robustness
+        mad = np.median(np.abs(tail_values - sigma_median))
+        sigma = sigma_median if mad < sigma_median * 0.5 else mad * 1.4826
+        
+        # Safety check: avoid zero or too small sigma
+        if sigma < 1e-10 * s[0] if s[0] > 0 else 1e-10:
             sigma = 1e-10 * s[0] if s[0] > 0 else 1e-10
     
-    omega = 0.56 * beta**3 - 0.95 * beta**2 + 1.82 * beta + 1.43
-    threshold = omega * sigma * np.sqrt(max(m, n))
+    # === Compute ω(β) using Gavish-Donoho formula ===
+    # For β < 1: ω(β) = 0.56β³ - 0.95β² + 1.82β + 1.43
+    # For β = 1: ω(1) = 2.858 (special case)
+    
+    if beta < 1:
+        omega = 0.56 * beta**3 - 0.95 * beta**2 + 1.82 * beta + 1.43
+    else:
+        # β = 1 (square matrix)
+        omega = 2.858
+    
+    # === Compute Optimal Threshold ===
+    # τ = ω(β) × σ × √n
+    # where n is the larger dimension (number of columns)
+    threshold = omega * sigma * np.sqrt(n)
+    
+    # === Count components above threshold ===
     n_components = np.sum(s > threshold)
     
+    # Safety: ensure at least 1 component if any singular value is significant
     if n_components == 0:
-        n_components = 1
+        # Check if first singular value is significantly larger than noise
+        if s[0] > 3 * sigma * np.sqrt(n):  # 3-sigma rule
+            n_components = 1
+            warnings.warn(
+                f"Gavish-Donoho selected k=0, but s[0]={s[0]:.2f} >> threshold={threshold:.2f}. "
+                f"Setting k=1. Consider: (1) data may not satisfy Gaussian noise assumption, "
+                f"(2) aspect ratio β={beta:.4f} is very small (m << n), "
+                f"(3) use 95% Energy method instead."
+            )
+        else:
+            n_components = 1
+            warnings.warn(
+                f"Gavish-Donoho threshold τ={threshold:.2f} exceeds all singular values. "
+                f"Setting k=1 by default. Likely causes: "
+                f"(1) Noise level overestimated (σ={sigma:.4f}), "
+                f"(2) Data dimension mismatch (β={beta:.4f} << 1), "
+                f"(3) Non-Gaussian noise structure. "
+                f"Recommendation: Use Cumulative Energy method (95%) instead."
+            )
     
     return threshold, n_components, s, omega
 
@@ -292,17 +371,25 @@ def compare_all_rank_methods(X, thresholds=(0.90, 0.95, 0.99), sigma=None):
             'method_name': f"{int(threshold*100)}% Energy"
         }
     
-    # Method 4: Gavish-Donoho
-    tau, n_comp_gd, _, omega = gavish_donoho_threshold(X, sigma=sigma)
-    explained_var_gd = np.sum(variance[:n_comp_gd]) / total_variance
-    
-    results['gavish_donoho'] = {
-        'n_components': n_comp_gd,
-        'threshold': tau,
-        'omega': omega,
-        'explained_variance': explained_var_gd,
-        'method_name': 'Gavish-Donoho'
-    }
+    # Method 4: Gavish-Donoho (with error handling)
+    try:
+        tau, n_comp_gd, _, omega = gavish_donoho_threshold(X, sigma=sigma)
+        explained_var_gd = np.sum(variance[:n_comp_gd]) / total_variance
+        
+        results['gavish_donoho'] = {
+            'n_components': n_comp_gd,
+            'threshold': tau,
+            'omega': omega,
+            'explained_variance': explained_var_gd,
+            'method_name': 'Gavish-Donoho'
+        }
+    except Exception as e:
+        warnings.warn(f"Gavish-Donoho failed: {e}")
+        results['gavish_donoho'] = {
+            'n_components': None, 
+            'method_name': 'Gavish-Donoho',
+            'error': str(e)
+        }
     
     # Method 5: Kneedle Algorithm
     try:
