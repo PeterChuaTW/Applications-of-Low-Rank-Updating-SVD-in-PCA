@@ -19,7 +19,7 @@ sys.path.insert(0, 'src')
 from incremental_pca import IncrementalPCA
 from batch_pca import BatchPCA
 from data_loader import load_orl_faces, normalize_faces
-from rank_selection import select_rank_energy
+from rank_selection import determine_n_components_by_energy
 
 
 def visualize_explained_variance(inc_pca, batch_pca, n_components_used, save_path='explained_variance.png'):
@@ -232,8 +232,8 @@ def main():
         # Compute SVD for rank selection
         _, s, _ = np.linalg.svd(centered_faces, full_matrices=False)
         
-        # Use energy method
-        n_components, variance = select_rank_energy(s, threshold=args.threshold)
+        # Use energy method - correct function call
+        n_components, _, variance = determine_n_components_by_energy(s, threshold=args.threshold)
         
         print(f"   ✅ Selected k = {n_components} ({variance*100:.2f}% variance)")
         print(f"      Method: {args.threshold*100:.0f}% Cumulative Energy")
