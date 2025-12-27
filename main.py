@@ -3,7 +3,7 @@
 This script:
 1. Loads the ORL Face Database (or generates synthetic data)
 2. Validates assumptions for advanced rank selection methods
-3. Compares different rank selection strategies
+3. Compares 6 different rank selection strategies comprehensively
 4. Compares Incremental PCA vs Batch PCA
 5. Evaluates reconstruction error and performance
 6. Generates diagnostic visualizations
@@ -25,8 +25,8 @@ from utils import (
     normalized_reconstruction_error
 )
 from rank_selection import (
-    compare_rank_selection_methods,
-    print_rank_selection_comparison
+    compare_all_rank_methods,
+    print_comprehensive_comparison
 )
 from noise_analysis import (
     validate_gavish_donoho_assumptions,
@@ -41,10 +41,10 @@ from visualize_assumptions import (
 def main():
     """Main execution function."""
     
-    print("="*70)
+    print("="*80)
     print("Incremental PCA using Brand's Algorithm")
-    print("ORL Face Database Analysis with Advanced Rank Selection")
-    print("="*70)
+    print("ORL Face Database Analysis with Comprehensive Rank Selection")
+    print("="*80)
     
     # Create output directory for plots
     os.makedirs('output', exist_ok=True)
@@ -52,9 +52,9 @@ def main():
     # ========================================================================
     # STEP 1: LOAD DATA
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 1: DATA LOADING")
-    print("="*70)
+    print("="*80)
     
     faces, labels, is_real = load_orl_faces('data/ORL_Faces')
     
@@ -71,9 +71,9 @@ def main():
     # ========================================================================
     # STEP 2: PREPROCESSING
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 2: PREPROCESSING (Mean Centering)")
-    print("="*70)
+    print("="*80)
     
     centered_faces, mean_face = normalize_faces(faces)
     print("\n   ✅ Data centered (zero mean)")
@@ -84,13 +84,12 @@ def main():
     # ========================================================================
     # STEP 3: VALIDATE GAVISH-DONOHO ASSUMPTIONS
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 3: VALIDATING GAVISH-DONOHO ASSUMPTIONS")
-    print("="*70)
+    print("="*80)
     print("\n   Testing if data satisfies Gaussian white noise assumption...")
     
     # Use a reasonable number of components for noise estimation
-    # Rule of thumb: 25% of min dimension
     n_components_for_noise = min(centered_faces.shape) // 4
     
     validation_results = validate_gavish_donoho_assumptions(
@@ -115,62 +114,85 @@ def main():
     )
     
     # ========================================================================
-    # STEP 4: RANK SELECTION COMPARISON
+    # STEP 4: COMPREHENSIVE RANK SELECTION (6 METHODS)
     # ========================================================================
-    print("\n" + "="*70)
-    print("STEP 4: RANK SELECTION METHOD COMPARISON")
-    print("="*70)
+    print("\n" + "="*80)
+    print("STEP 4: COMPREHENSIVE RANK SELECTION (6 Methods)")
+    print("="*80)
+    print("\n   Comparing:")
+    print("   1. 90% Cumulative Energy")
+    print("   2. 95% Cumulative Energy")
+    print("   3. 99% Cumulative Energy")
+    print("   4. Gavish-Donoho Optimal Threshold")
+    print("   5. Kneedle Algorithm (Maximum Curvature)")
+    print("   6. L-Method (Two-Segment Regression)")
     
-    rank_results = compare_rank_selection_methods(
+    rank_results = compare_all_rank_methods(
         centered_faces,
         thresholds=(0.90, 0.95, 0.99)
     )
     
-    print_rank_selection_comparison(rank_results)
+    print_comprehensive_comparison(rank_results)
     
     # Visualize rank comparison
     print("   Generating rank comparison plot...")
     plot_rank_comparison(rank_results, save_dir='output')
     
     # ========================================================================
-    # STEP 5: SELECT OPTIMAL RANK
+    # STEP 5: SELECT OPTIMAL RANK (CONSENSUS-BASED)
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 5: SELECTING OPTIMAL RANK")
-    print("="*70)
+    print("="*80)
     
-    # Decision logic based on validation results
+    # Collect all valid k values
+    k_values = []
+    
+    for threshold, data in rank_results['energy_methods'].items():
+        k_values.append(data['n_components'])
+    
+    if rank_results['gavish_donoho'].get('n_components'):
+        k_values.append(rank_results['gavish_donoho']['n_components'])
+    
+    if rank_results['kneedle'].get('n_components'):
+        k_values.append(rank_results['kneedle']['n_components'])
+    
+    if rank_results['l_method'].get('n_components'):
+        k_values.append(rank_results['l_method']['n_components'])
+    
+    # Use median as consensus
+    n_components = int(np.median(k_values))
+    k_95 = rank_results['energy_methods'][0.95]['n_components']
+    
+    print(f"\n   Consensus Strategy:")
+    print(f"   - Median of all methods: k = {n_components}")
+    print(f"   - 95% Energy baseline: k = {k_95}")
+    print(f"   - Range across methods: [{min(k_values)}, {max(k_values)}]")
+    
+    # Decision logic
     if validation_results['assumptions_met']:
-        # Use Gavish-Donoho if assumptions are met
-        n_components = rank_results['gavish_donoho']['n_components']
-        selection_method = "Gavish-Donoho (assumptions satisfied)"
-        print(f"\n   ✅ Using Gavish-Donoho: k = {n_components}")
+        selection_rationale = "Median consensus (assumptions satisfied)"
+        print(f"\n   ✅ Selected: k = {n_components} (median consensus)")
+        print(f"      Gavish-Donoho assumptions are satisfied")
     else:
-        # Fallback to 95% energy if assumptions violated
-        n_components = rank_results['energy_methods'][0.95]['n_components']
-        selection_method = "95% Cumulative Energy (fallback)"
-        print(f"\n   ⚠️  Using 95% Energy (Gavish-Donoho assumptions not fully met): k = {n_components}")
-    
-    print(f"   Selection method: {selection_method}")
-    print(f"   Final rank (k): {n_components}")
-    
-    # For comparison, also try with both methods
-    k_energy_95 = rank_results['energy_methods'][0.95]['n_components']
-    k_gavish = rank_results['gavish_donoho']['n_components']
+        selection_rationale = "Median consensus with validation note"
+        print(f"\n   ⚠️  Selected: k = {n_components} (median consensus)")
+        print(f"      Note: Gavish-Donoho assumptions partially violated")
+        print(f"      Recommendation: Validate results with k = {k_95} (95% Energy)")
     
     # ========================================================================
     # STEP 6: PCA COMPARISON
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 6: INCREMENTAL PCA vs BATCH PCA COMPARISON")
-    print("="*70)
+    print("="*80)
     
-    batch_size = 10  # Batch size for incremental PCA
+    batch_size = 10
     
     print(f"\n   Configuration:")
     print(f"   - Number of components: {n_components}")
     print(f"   - Batch size: {batch_size}")
-    print(f"   - Selection method: {selection_method}")
+    print(f"   - Selection method: {selection_rationale}")
     
     # Initialize PCA models
     print("\n   Initializing PCA models...")
@@ -193,9 +215,9 @@ def main():
     # ========================================================================
     # STEP 7: ADDITIONAL ANALYSIS
     # ========================================================================
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("STEP 7: ADDITIONAL ANALYSIS")
-    print("="*70)
+    print("="*80)
     
     # Explained variance
     inc_variance_ratio = inc_pca.get_explained_variance_ratio()
@@ -218,7 +240,6 @@ def main():
     
     similarities = []
     for i in range(n_compare):
-        # Cosine similarity (components might differ in sign)
         similarity = abs(np.dot(inc_components[i], batch_components[i]))
         similarity /= (np.linalg.norm(inc_components[i]) * np.linalg.norm(batch_components[i]))
         similarities.append(similarity)
@@ -227,45 +248,55 @@ def main():
     print(f"\n   Average similarity: {np.mean(similarities):.6f}")
     
     # ========================================================================
-    # STEP 8: SUMMARY
+    # STEP 8: COMPREHENSIVE SUMMARY
     # ========================================================================
-    print("\n" + "="*70)
-    print("SUMMARY")
-    print("="*70)
+    print("\n" + "="*80)
+    print("COMPREHENSIVE SUMMARY")
+    print("="*80)
     
     print(f"\n   Dataset:")
     print(f"   - Samples: {faces.shape[0]}")
     print(f"   - Dimensions: {faces.shape[1]}")
     
-    print(f"\n   Rank Selection:")
-    print(f"   - 90% Energy: k = {rank_results['energy_methods'][0.90]['n_components']}")
-    print(f"   - 95% Energy: k = {k_energy_95}")
-    print(f"   - 99% Energy: k = {rank_results['energy_methods'][0.99]['n_components']}")
-    print(f"   - Gavish-Donoho: k = {k_gavish}")
-    print(f"   - Selected: k = {n_components} ({selection_method})")
+    print(f"\n   Rank Selection Results (6 Methods):")
+    print(f"   - 90% Energy:     k = {rank_results['energy_methods'][0.90]['n_components']}")
+    print(f"   - 95% Energy:     k = {k_95}")
+    print(f"   - 99% Energy:     k = {rank_results['energy_methods'][0.99]['n_components']}")
+    
+    if rank_results['gavish_donoho'].get('n_components'):
+        print(f"   - Gavish-Donoho:  k = {rank_results['gavish_donoho']['n_components']}")
+    
+    if rank_results['kneedle'].get('n_components'):
+        print(f"   - Kneedle:        k = {rank_results['kneedle']['n_components']}")
+    
+    if rank_results['l_method'].get('n_components'):
+        print(f"   - L-Method:       k = {rank_results['l_method']['n_components']}")
+    
+    print(f"\n   ➜ CONSENSUS: k = {n_components} (median)")
     
     print(f"\n   Gavish-Donoho Validation:")
-    print(f"   - Gaussian test: {'✓ PASS' if validation_results['gaussian_test']['is_gaussian'] else '✗ FAIL'}")
-    print(f"   - White noise test: {'✓ PASS' if validation_results['white_noise_test']['is_white'] else '✗ FAIL'}")
+    print(f"   - Gaussian: {'✓ PASS' if validation_results['gaussian_test']['is_gaussian'] else '✗ FAIL'}")
+    print(f"   - White Noise: {'✓ PASS' if validation_results['white_noise_test']['is_white'] else '✗ FAIL'}")
     print(f"   - Overall: {'✓ PASS' if validation_results['assumptions_met'] else '✗ FAIL'}")
     
-    print(f"\n   Performance:")
-    print(f"   - Incremental PCA time: {results['incremental_time']:.4f}s")
-    print(f"   - Batch PCA time: {results['batch_time']:.4f}s")
-    print(f"   - Speedup: {results['batch_time']/results['incremental_time']:.2f}x")
+    print(f"\n   Performance (Incremental vs Batch):")
+    print(f"   - Incremental time: {results['incremental_time']:.4f}s")
+    print(f"   - Batch time:       {results['batch_time']:.4f}s")
+    print(f"   - Speedup:          {results['batch_time']/results['incremental_time']:.2f}x")
     
     print(f"\n   Accuracy:")
     print(f"   - Reconstruction error: {results['reconstruction_error']:.6f}")
-    print(f"   - Subspace distance: {results['subspace_distance']:.6f}")
+    print(f"   - Subspace distance:    {results['subspace_distance']:.6f}")
     
     print(f"\n   Output Files:")
-    print(f"   - output/residual_diagnostics.png (Q-Q, histogram, ACF, heatmap)")
-    print(f"   - output/rank_comparison.png (rank selection comparison)")
+    print(f"   - output/residual_diagnostics.png")
+    print(f"   - output/rank_comparison.png")
     
-    print("\n" + "="*70)
+    print("\n" + "="*80)
     print("ANALYSIS COMPLETE!")
-    print("="*70)
-    print("\n   ✅ All results saved to 'output/' directory")
+    print("="*80)
+    print("\n   ✅ All 6 rank selection methods compared")
+    print("   ✅ Results saved to 'output/' directory")
     print("   ✅ Ready for report and presentation\n")
     
     return {
@@ -273,7 +304,8 @@ def main():
         'rank_results': rank_results,
         'validation_results': validation_results,
         'selected_rank': n_components,
-        'selection_method': selection_method
+        'selection_method': selection_rationale,
+        'all_k_values': k_values
     }
 
 
