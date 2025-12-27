@@ -14,10 +14,12 @@ The implementation processes the ORL Face Database (400 images, 92×112 pixels) 
 
 - ✅ **Brand's Algorithm**: Efficient low-rank SVD updating for incremental PCA
 - ✅ **NumPy-based**: All matrix operations use NumPy for performance
+- ✅ **Automatic Download**: ORL Face Database downloaded automatically if not present
+- ✅ **Data Verification**: Built-in verification to ensure data quality
 - ✅ **Reconstruction Error**: Calculate and compare reconstruction quality
 - ✅ **Performance Benchmarking**: Compare timing and efficiency
 - ✅ **ORL Face Database Support**: Load and process face images
-- ✅ **Synthetic Data Generation**: Automatic fallback if database not available
+- ✅ **Synthetic Data Fallback**: Automatic fallback if database not available
 
 ## Installation
 
@@ -36,10 +38,24 @@ python main.py
 ```
 
 This will:
-1. Load the ORL Face Database (or generate synthetic data)
+1. **Automatically download** the ORL Face Database (if not present)
 2. Perform Incremental PCA with batch updates
 3. Perform Batch PCA for comparison
 4. Display timing and reconstruction error metrics
+
+### Verify Database
+
+Before running experiments, verify that the ORL database is correctly loaded:
+
+```bash
+python verify_data.py
+```
+
+This will:
+- Download the database if not present
+- Verify data structure and content
+- Report whether real or synthetic data is being used
+- Provide detailed diagnostic information
 
 ### Visualization
 
@@ -59,24 +75,30 @@ This creates three PNG files:
 ```python
 from src.incremental_pca import IncrementalPCA
 from src.batch_pca import BatchPCA
-from src.data_loader import load_orl_faces
+from src.data_loader import load_orl_faces, normalize_faces
 
-# Load data
-faces, labels = load_orl_faces('data/ORL_Faces')
+# Load data (automatically downloads if needed)
+faces, labels, is_real = load_orl_faces('data/ORL_Faces')
+
+if not is_real:
+    print("WARNING: Using synthetic data for demonstration only")
+
+# Preprocess: Mean Centering (PCA standard)
+centered_faces, mean_face = normalize_faces(faces)
 
 # Incremental PCA
 inc_pca = IncrementalPCA(n_components=50)
-for i in range(0, len(faces), 10):
-    batch = faces[i:i+10]
+for i in range(0, len(centered_faces), 10):
+    batch = centered_faces[i:i+10]
     inc_pca.partial_fit(batch)
 
 # Transform and reconstruct
-transformed = inc_pca.transform(faces)
+transformed = inc_pca.transform(centered_faces)
 reconstructed = inc_pca.inverse_transform(transformed)
 
 # Batch PCA
 batch_pca = BatchPCA(n_components=50)
-batch_pca.fit(faces)
+batch_pca.fit(centered_faces)
 ```
 
 ## Project Structure
@@ -88,12 +110,15 @@ batch_pca.fit(faces)
 │   ├── incremental_pca.py    # Incremental PCA with Brand's algorithm
 │   ├── batch_pca.py          # Standard batch PCA
 │   ├── utils.py              # Utilities for benchmarking and error calculation
-│   └── data_loader.py        # ORL Face Database loading utilities
+│   └── data_loader.py        # ORL Face Database loading utilities with auto-download
 ├── data/
 │   ├── README.md             # Data directory documentation
-│   └── ORL_Faces/            # ORL Face Database (place images here)
+│   └── ORL_Faces/            # ORL Face Database (auto-downloaded)
+├── docs/
+│   └── ORL_DATABASE_GUIDE.md # Comprehensive database usage guide
 ├── main.py                   # Main demonstration script
 ├── visualize.py              # Visualization script
+├── verify_data.py            # Database verification script
 ├── test_incremental_pca.py   # Unit tests
 ├── requirements.txt          # Python dependencies
 └── README.md                 # This file
@@ -130,22 +155,66 @@ The ORL (Olivetti Research Laboratory) Face Database contains:
 - 10 images per subject
 - 92×112 pixels per image (grayscale)
 
-### Directory Structure
+### Automatic Download
 
-Place the ORL Face Database in `data/ORL_Faces/` with the following structure:
+**New Feature**: The database is now downloaded automatically!
+
+When you run the code for the first time, it will:
+1. Check if `data/ORL_Faces/` exists
+2. If not, download from official AT&T archive
+3. Extract and verify the database
+4. Clean up temporary files
+
+No manual download needed! 🎉
+
+### Manual Download (Optional)
+
+If automatic download fails, you can manually download:
+
+1. Visit: https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
+2. Download `att_faces.zip`
+3. Extract to `data/ORL_Faces/`
+
+### Expected Directory Structure
+
 ```
 data/ORL_Faces/
 ├── s1/
 │   ├── 1.pgm
 │   ├── 2.pgm
-│   └── ...
+│   └── ... (10 images)
 ├── s2/
 │   └── ...
 └── s40/
     └── ...
 ```
 
-If the database is not available, the program will automatically generate synthetic face-like data for demonstration.
+### Data Verification
+
+Use `verify_data.py` to ensure data quality:
+
+```bash
+python verify_data.py
+```
+
+Expected output:
+```
+==============================================================
+ORL FACE DATABASE VERIFICATION
+==============================================================
+
+✓ Check 1/7: Total samples = 400 ✓
+✓ Check 2/7: Feature dimension = 10304 (92×112 pixels) ✓
+✓ Check 3/7: Label range = [0, 39] (40 subjects) ✓
+✓ Check 4/7: Subjects = 40, Images per subject = 10 ✓
+✓ Check 5/7: Pixel range = [0.00, 255.00] ✓
+✓ Check 6/7: Data type = float64 ✓
+✓ Check 7/7: Using REAL ORL Face Database ✓
+
+🎉 All checks passed! Database is ready for experiments.
+```
+
+For detailed usage instructions, see [ORL Database Guide](docs/ORL_DATABASE_GUIDE.md).
 
 ## Performance Metrics
 
@@ -207,15 +276,31 @@ Performance Comparison:
 - Matplotlib >= 3.3.0 (for visualization)
 - Pillow >= 8.0.0 (for image loading)
 
+## New in Version 2.0
+
+- ✅ **Automatic ORL database download**
+- ✅ **Data verification script** (`verify_data.py`)
+- ✅ **Real vs synthetic data detection** (3rd return value in `load_orl_faces()`)
+- ✅ **Mean Centering preprocessing** (PCA standard in `normalize_faces()`)
+- ✅ **Comprehensive usage guide** (`docs/ORL_DATABASE_GUIDE.md`)
+- ✅ **Improved error handling and logging**
+
 ## References
 
 1. Brand, M. (2006). "Fast low-rank modifications of the thin singular value decomposition." Linear Algebra and its Applications, 415(1), 20-30.
 2. ORL Face Database: https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
+3. AT&T Laboratories Cambridge
 
 ## License
 
 MIT License - see LICENSE file for details
 
-## Author
+## Authors
 
-Numerical Analysis Final Project
+**Numerical Analysis Final Project**
+
+National Cheng Kung University (NCKU)
+- 蔡宇德 (Chua Yee Teck)
+- 陳柏諾 (Chen Po-Yu)
+- 鄭丞佑 (Cheng Cheng-Yu)
+- 陳柏任 (Chen Po-Jen)
