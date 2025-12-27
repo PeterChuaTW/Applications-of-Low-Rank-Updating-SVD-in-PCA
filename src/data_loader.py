@@ -7,13 +7,82 @@ from PIL import Image
 import urllib.request
 import zipfile
 import shutil
+import subprocess
+import sys
+
+
+def install_gdown():
+    """Install gdown if not available."""
+    try:
+        import gdown
+        return True
+    except ImportError:
+        print("Installing gdown for Google Drive download...")
+        try:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', 'gdown'])
+            return True
+        except:
+            return False
+
+
+def download_from_google_drive(data_dir='data/ORL_Faces'):
+    """
+    Download ORL Database from Google Drive using gdown.
+    
+    This is a backup method if the official download fails.
+    
+    Parameters:
+    -----------
+    data_dir : str
+        Target directory for the database
+        
+    Returns:
+    --------
+    success : bool
+        True if download successful
+    """
+    print("="*60)
+    print("Downloading from Google Drive (backup method)...")
+    print("="*60)
+    
+    # Google Drive folder URL (public)
+    drive_url = "https://drive.google.com/drive/folders/1c3cOMdfy0jkCTWHFhIesLCKb9t57rywa"
+    
+    try:
+        # Install gdown if needed
+        if not install_gdown():
+            print("✗ Failed to install gdown")
+            return False
+        
+        import gdown
+        
+        # Download folder
+        print(f"Downloading from: {drive_url}")
+        print("This may take a few minutes...")
+        
+        # Ensure parent directory exists
+        os.makedirs('data', exist_ok=True)
+        
+        # Download folder
+        gdown.download_folder(drive_url, output=data_dir, quiet=False, use_cookies=False)
+        
+        if os.path.exists(data_dir) and verify_database_structure(data_dir):
+            print("✓ Downloaded successfully from Google Drive")
+            return True
+        else:
+            print("✗ Download completed but structure verification failed")
+            return False
+            
+    except Exception as e:
+        print(f"✗ Google Drive download failed: {e}")
+        return False
 
 
 def download_orl_database(data_dir='data/ORL_Faces'):
     """
     Automatically download and extract ORL Face Database.
     
-    Downloads from the official AT&T (formerly ORL) database archive.
+    Tries official source first, then Google Drive backup.
     
     Parameters:
     -----------
@@ -26,19 +95,19 @@ def download_orl_database(data_dir='data/ORL_Faces'):
         True if download successful, False otherwise
     """
     # 如果目錄已存在，不需要下載
-    if os.path.exists(data_dir):
+    if os.path.exists(data_dir) and verify_database_structure(data_dir):
         print(f"✓ ORL database already exists at {data_dir}")
         return True
     
-    # 官方下載連結
+    # 方法 1: 官方下載連結
     url = 'https://www.cl.cam.ac.uk/Research/DTG/attarchive/pub/data/att_faces.zip'
     zip_path = 'data/att_faces.zip'
     temp_extract_dir = 'data/att_faces_temp'
     
-    print("=" * 60)
-    print("Downloading ORL Face Database...")
+    print("="*60)
+    print("Method 1: Downloading from official source...")
     print(f"Source: {url}")
-    print("=" * 60)
+    print("="*60)
     
     try:
         # 確保 data 目錄存在
@@ -55,17 +124,25 @@ def download_orl_database(data_dir='data/ORL_Faces'):
             zip_ref.extractall(temp_extract_dir)
         print("✓ Extracted successfully")
         
-        # 找到解壓後的實際目錄（可能是 orl_faces 或 att_faces）
-        extracted_dirs = os.listdir(temp_extract_dir)
-        if extracted_dirs:
-            source_dir = os.path.join(temp_extract_dir, extracted_dirs[0])
-            # 移動到目標位置
-            shutil.move(source_dir, data_dir)
-            print(f"✓ Moved to {data_dir}")
-        else:
-            # 如果直接解壓到根目錄
+        # 找到解壓後的實際目錄
+        extracted_items = os.listdir(temp_extract_dir)
+        
+        # 檢查是否直接包含 s1, s2, ... 資料夾
+        has_subject_folders = any(item.startswith('s') and item[1:].isdigit() for item in extracted_items)
+        
+        if has_subject_folders:
+            # 直接就是目標資料夾結構
             shutil.move(temp_extract_dir, data_dir)
             print(f"✓ Moved to {data_dir}")
+        elif len(extracted_items) == 1:
+            # 有一層子資料夾
+            source_dir = os.path.join(temp_extract_dir, extracted_items[0])
+            shutil.move(source_dir, data_dir)
+            shutil.rmtree(temp_extract_dir)
+            print(f"✓ Moved to {data_dir}")
+        else:
+            print("⚠ Warning: Unexpected directory structure")
+            return False
         
         # 清理臨時檔案
         if os.path.exists(zip_path):
@@ -76,17 +153,21 @@ def download_orl_database(data_dir='data/ORL_Faces'):
         
         # 驗證下載結果
         if verify_database_structure(data_dir):
-            print("=" * 60)
+            print("="*60)
             print("✓ ORL Face Database ready!")
-            print("=" * 60)
+            print("="*60)
             return True
         else:
             print("⚠ Warning: Database structure may be incorrect")
-            return False
+            # 清理失敗的下載
+            if os.path.exists(data_dir):
+                shutil.rmtree(data_dir)
+            # 嘗試 Google Drive 備用下載
+            return download_from_google_drive(data_dir)
             
     except Exception as e:
-        print(f"✗ Failed to download ORL database: {e}")
-        print("Cleaning up partial downloads...")
+        print(f"✗ Official download failed: {e}")
+        print("")
         
         # 清理失敗的下載
         for path in [zip_path, temp_extract_dir, data_dir]:
@@ -96,10 +177,9 @@ def download_orl_database(data_dir='data/ORL_Faces'):
                 else:
                     shutil.rmtree(path)
         
-        print("=" * 60)
-        print("Will use synthetic data instead.")
-        print("=" * 60)
-        return False
+        # 方法 2: Google Drive 備用下載
+        print("Trying backup download from Google Drive...")
+        return download_from_google_drive(data_dir)
 
 
 def verify_database_structure(data_dir='data/ORL_Faces'):
@@ -125,7 +205,7 @@ def verify_database_structure(data_dir='data/ORL_Faces'):
     subject_count = 0
     for i in range(1, 41):
         subject_dir = os.path.join(data_dir, f's{i}')
-        if os.path.exists(subject_dir):
+        if os.path.exists(subject_dir) and os.path.isdir(subject_dir):
             subject_count += 1
     
     return subject_count >= 30  # 至少要有 30 個主題目錄
@@ -160,7 +240,10 @@ def load_orl_faces(data_dir='data/ORL_Faces', auto_download=True):
         print("ORL Face Database not found. Attempting automatic download...")
         download_success = download_orl_database(data_dir)
         if not download_success:
+            print("")
+            print("All download methods failed.")
             print("Using synthetic face data for demonstration...")
+            print("")
             return *generate_synthetic_faces(), False
     
     # 檢查目錄是否存在
@@ -218,12 +301,12 @@ def load_orl_faces(data_dir='data/ORL_Faces', auto_download=True):
     labels = np.array(labels)
     
     # 印出統計資訊
-    print("=" * 60)
+    print("="*60)
     print(f"✓ Successfully loaded {len(faces)} real face images")
     print(f"  - Subjects: {len(np.unique(labels))}")
     print(f"  - Images per subject: ~{len(faces) // len(np.unique(labels))}")
     print(f"  - Image dimensions: 92×112 pixels (10304 features)")
-    print("=" * 60)
+    print("="*60)
     
     return faces, labels, True
 
@@ -250,10 +333,10 @@ def generate_synthetic_faces(n_samples=400, height=92, width=112):
     labels : array-like, shape (n_samples,)
         Synthetic subject labels
     """
-    print("=" * 60)
+    print("="*60)
     print(f"Generating {n_samples} synthetic face images...")
     print(f"Image size: {height}×{width} pixels")
-    print("=" * 60)
+    print("="*60)
     
     n_features = height * width
     faces = []
@@ -283,7 +366,7 @@ def generate_synthetic_faces(n_samples=400, height=92, width=112):
     
     print(f"✓ Generated {len(faces)} synthetic face images")
     print("⚠ Note: Using synthetic data, not real ORL database")
-    print("=" * 60)
+    print("="*60)
     
     return faces, labels
 
