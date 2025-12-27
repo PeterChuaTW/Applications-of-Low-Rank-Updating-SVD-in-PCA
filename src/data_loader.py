@@ -216,7 +216,7 @@ def load_orl_faces(data_dir='data/ORL_Faces', auto_download=True):
     Load ORL Face Database with automatic download option.
     
     The ORL database contains 400 images (40 subjects, 10 images each).
-    Each image is 92x112 pixels (grayscale).
+    Each image is 92x112 pixels (width x height, grayscale).
     
     Parameters:
     -----------
@@ -280,10 +280,12 @@ def load_orl_faces(data_dir='data/ORL_Faces', auto_download=True):
                     img = Image.open(img_path).convert('L')
                     
                     # 調整大小至 92x112（如果需要）
+                    # PIL.Image.size is (width, height)
                     if img.size != (92, 112):
                         img = img.resize((92, 112))
                     
                     # 轉換為 numpy 陣列並展平
+                    # NumPy array from PIL is (height, width) = (112, 92)
                     face_vector = np.array(img).flatten().astype(np.float64)
                     
                     faces.append(face_vector)
@@ -305,13 +307,13 @@ def load_orl_faces(data_dir='data/ORL_Faces', auto_download=True):
     print(f"✓ Successfully loaded {len(faces)} real face images")
     print(f"  - Subjects: {len(np.unique(labels))}")
     print(f"  - Images per subject: ~{len(faces) // len(np.unique(labels))}")
-    print(f"  - Image dimensions: 92×112 pixels (10304 features)")
+    print(f"  - Image dimensions: 112 (H) × 92 (W) pixels (10304 features)")
     print("="*60)
     
     return faces, labels, True
 
 
-def generate_synthetic_faces(n_samples=400, height=92, width=112):
+def generate_synthetic_faces(n_samples=400, height=112, width=92):
     """
     Generate synthetic face-like data for demonstration.
     
@@ -322,9 +324,9 @@ def generate_synthetic_faces(n_samples=400, height=92, width=112):
     n_samples : int
         Number of synthetic faces to generate
     height : int
-        Image height
+        Image height (ORL standard: 112)
     width : int
-        Image width
+        Image width (ORL standard: 92)
         
     Returns:
     --------
@@ -335,7 +337,7 @@ def generate_synthetic_faces(n_samples=400, height=92, width=112):
     """
     print("="*60)
     print(f"Generating {n_samples} synthetic face images...")
-    print(f"Image size: {height}×{width} pixels")
+    print(f"Image size: {height} (H) × {width} (W) pixels")
     print("="*60)
     
     n_features = height * width
@@ -426,22 +428,26 @@ def split_data(X, y, train_ratio=0.8, random_state=42):
     return X[train_indices], X[test_indices], y[train_indices], y[test_indices]
 
 
-def reshape_to_image(face_vector, height=92, width=112):
+def reshape_to_image(face_vector, height=112, width=92):
     """
     Reshape a flattened face vector back to image.
+    
+    IMPORTANT: ORL Face Database standard dimensions are:
+    - Height: 112 pixels (rows)
+    - Width: 92 pixels (columns)
     
     Parameters:
     -----------
     face_vector : array-like, shape (height*width,)
-        Flattened face image
+        Flattened face image (default: 10304 = 112*92)
     height : int
-        Image height
+        Image height in pixels (default: 112 for ORL)
     width : int
-        Image width
+        Image width in pixels (default: 92 for ORL)
         
     Returns:
     --------
     image : array-like, shape (height, width)
-        Face image
+        Face image as 2D array
     """
     return face_vector.reshape(height, width)
