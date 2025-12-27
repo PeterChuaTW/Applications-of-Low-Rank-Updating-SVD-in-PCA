@@ -33,8 +33,10 @@ from noise_analysis import (
     estimate_noise_from_residuals
 )
 from visualize_assumptions import (
-    plot_residual_diagnostics,
-    plot_rank_comparison
+    plot_residual_diagnostics
+)
+from visualize_rank_selection import (
+    plot_all_rank_visualizations
 )
 
 
@@ -134,9 +136,13 @@ def main():
     
     print_comprehensive_comparison(rank_results)
     
-    # Visualize rank comparison
-    print("   Generating rank comparison plot...")
-    plot_rank_comparison(rank_results, save_dir='output')
+    # Generate comprehensive visualizations for all 6 methods
+    print("\n   Generating comprehensive visualizations...")
+    plot_all_rank_visualizations(
+        rank_results['singular_values'],
+        rank_results,
+        save_dir='output'
+    )
     
     # ========================================================================
     # STEP 5: SELECT OPTIMAL RANK (CONSENSUS-BASED)
@@ -289,8 +295,14 @@ def main():
     print(f"   - Subspace distance:    {results['subspace_distance']:.6f}")
     
     print(f"\n   Output Files:")
-    print(f"   - output/residual_diagnostics.png")
-    print(f"   - output/rank_comparison.png")
+    print(f"   📄 output/residual_diagnostics.png")
+    print(f"      (Q-Q plot, histogram, ACF, residual heatmap)")
+    print(f"   📄 output/scree_plot_with_elbows.png")
+    print(f"      (Scree plot with all 6 elbow points marked)")
+    print(f"   📄 output/rank_method_comparison.png")
+    print(f"      (Bar charts comparing k and variance)")
+    print(f"   📄 output/rank_consensus.png")
+    print(f"      (Consensus analysis visualization)")
     
     print("\n" + "="*80)
     print("ANALYSIS COMPLETE!")
