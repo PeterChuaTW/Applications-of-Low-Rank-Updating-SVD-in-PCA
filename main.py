@@ -40,6 +40,24 @@ from visualize_rank_selection import (
 )
 
 
+def subspace_distance(U1, U2):
+    """Calculate principal angle-based subspace distance."""
+    # Ensure same number of components
+    k = min(U1.shape[1], U2.shape[1])
+    U1 = U1[:, :k]
+    U2 = U2[:, :k]
+    
+    # Compute singular values of U1^T @ U2
+    _, s, _ = np.linalg.svd(U1.T @ U2, full_matrices=False)
+    
+    # Clamp to [0, 1] to avoid numerical errors
+    s = np.clip(s, 0, 1)
+    
+    # Compute principal angles and distance
+    angles = np.arccos(s)
+    return np.linalg.norm(angles)
+
+
 def main():
     """Main execution function."""
     
@@ -145,46 +163,50 @@ def main():
     )
     
     # ========================================================================
-    # STEP 5: SELECT OPTIMAL RANK (CONSENSUS-BASED)
+    # STEP 5: SELECT OPTIMAL RANK (95% ENERGY FOR IMAGE RECONSTRUCTION)
     # ========================================================================
     print("\n" + "="*80)
     print("STEP 5: SELECTING OPTIMAL RANK")
     print("="*80)
     
-    # Collect all valid k values
-    k_values = []
+    # For IMAGE RECONSTRUCTION, use 95% Energy (not median consensus)
+    k_95 = rank_results['energy_methods'][0.95]['n_components']
     
+    # Collect all valid k values for analysis
+    k_values = []
     for threshold, data in rank_results['energy_methods'].items():
         k_values.append(data['n_components'])
     
     if rank_results['gavish_donoho'].get('n_components'):
-        k_values.append(rank_results['gavish_donoho']['n_components'])
+        k_gavish = rank_results['gavish_donoho']['n_components']
+        if k_gavish > 1:  # Only include if reasonable
+            k_values.append(k_gavish)
     
     if rank_results['kneedle'].get('n_components'):
         k_values.append(rank_results['kneedle']['n_components'])
     
     if rank_results['l_method'].get('n_components'):
-        k_values.append(rank_results['l_method']['n_components'])
+        k_l = rank_results['l_method']['n_components']
+        if k_l < centered_faces.shape[0]:  # Only include if not trivial
+            k_values.append(k_l)
     
-    # Use median as consensus
-    n_components = int(np.median(k_values))
-    k_95 = rank_results['energy_methods'][0.95]['n_components']
+    median_k = int(np.median(k_values))
     
-    print(f"\n   Consensus Strategy:")
-    print(f"   - Median of all methods: k = {n_components}")
-    print(f"   - 95% Energy baseline: k = {k_95}")
-    print(f"   - Range across methods: [{min(k_values)}, {max(k_values)}]")
+    # DECISION: Use 95% Energy for image reconstruction
+    n_components = k_95
+    selection_rationale = "95% Energy (Image Reconstruction Standard)"
     
-    # Decision logic
-    if validation_results['assumptions_met']:
-        selection_rationale = "Median consensus (assumptions satisfied)"
-        print(f"\n   ✅ Selected: k = {n_components} (median consensus)")
-        print(f"      Gavish-Donoho assumptions are satisfied")
-    else:
-        selection_rationale = "Median consensus with validation note"
-        print(f"\n   ⚠️  Selected: k = {n_components} (median consensus)")
-        print(f"      Note: Gavish-Donoho assumptions partially violated")
-        print(f"      Recommendation: Validate results with k = {k_95} (95% Energy)")
+    print(f"\n   Rank Selection Analysis:")
+    print(f"   - Median consensus: k = {median_k}")
+    print(f"   - 95% Energy:       k = {k_95}")
+    print(f"   - Range: [{min(k_values)}, {max(k_values)}]")
+    
+    print(f"\n   🎯 SELECTED: k = {n_components} (95% Energy)")
+    print(f"      Rationale: Image reconstruction requires ≥95% variance")
+    print(f"      Median consensus (k={median_k}) optimizes denoising, not visual quality")
+    
+    if not validation_results['assumptions_met']:
+        print(f"      Note: Gavish-Donoho assumptions violated (expected for images)")
     
     # ========================================================================
     # STEP 6: PCA COMPARISON
@@ -215,6 +237,11 @@ def main():
         batch_pca=batch_pca
     )
     
+    # Calculate subspace distance
+    inc_components = inc_pca.get_components()
+    batch_components = batch_pca.components_
+    subspace_dist = subspace_distance(inc_components.T, batch_components.T)
+    
     # Print results
     print_comparison_results(results)
     
@@ -238,9 +265,6 @@ def main():
     print(f"   - Batch PCA:       {np.sum(batch_variance_ratio):.4f}")
     
     # Component similarity
-    inc_components = inc_pca.get_components()
-    batch_components = batch_pca.components_
-    
     n_compare = min(5, n_components)
     print(f"\n   Component similarity (first {n_compare} components):")
     
@@ -252,6 +276,7 @@ def main():
         print(f"   - Component {i+1}: {similarity:.6f}")
     
     print(f"\n   Average similarity: {np.mean(similarities):.6f}")
+    print(f"   Subspace distance: {subspace_dist:.6f}")
     
     # ========================================================================
     # STEP 8: COMPREHENSIVE SUMMARY
@@ -266,7 +291,7 @@ def main():
     
     print(f"\n   Rank Selection Results (6 Methods):")
     print(f"   - 90% Energy:     k = {rank_results['energy_methods'][0.90]['n_components']}")
-    print(f"   - 95% Energy:     k = {k_95}")
+    print(f"   - 95% Energy:     k = {k_95} ⭐ SELECTED")
     print(f"   - 99% Energy:     k = {rank_results['energy_methods'][0.99]['n_components']}")
     
     if rank_results['gavish_donoho'].get('n_components'):
@@ -278,21 +303,19 @@ def main():
     if rank_results['l_method'].get('n_components'):
         print(f"   - L-Method:       k = {rank_results['l_method']['n_components']}")
     
-    print(f"\n   ➜ CONSENSUS: k = {n_components} (median)")
-    
     print(f"\n   Gavish-Donoho Validation:")
     print(f"   - Gaussian: {'✓ PASS' if validation_results['gaussian_test']['is_gaussian'] else '✗ FAIL'}")
     print(f"   - White Noise: {'✓ PASS' if validation_results['white_noise_test']['is_white'] else '✗ FAIL'}")
     print(f"   - Overall: {'✓ PASS' if validation_results['assumptions_met'] else '✗ FAIL'}")
     
     print(f"\n   Performance (Incremental vs Batch):")
-    print(f"   - Incremental time: {results['incremental_time']:.4f}s")
-    print(f"   - Batch time:       {results['batch_time']:.4f}s")
-    print(f"   - Speedup:          {results['batch_time']/results['incremental_time']:.2f}x")
+    print(f"   - Incremental time: {results['incremental']['fit_time']:.4f}s")
+    print(f"   - Batch time:       {results['batch']['fit_time']:.4f}s")
+    print(f"   - Speedup:          {results['speedup']:.2f}x")
     
     print(f"\n   Accuracy:")
-    print(f"   - Reconstruction error: {results['reconstruction_error']:.6f}")
-    print(f"   - Subspace distance:    {results['subspace_distance']:.6f}")
+    print(f"   - Reconstruction error: {results['incremental']['reconstruction_error']:.4f}")
+    print(f"   - Subspace distance:    {subspace_dist:.6f}")
     
     print(f"\n   Output Files:")
     print(f"   📄 output/residual_diagnostics.png")
@@ -317,7 +340,8 @@ def main():
         'validation_results': validation_results,
         'selected_rank': n_components,
         'selection_method': selection_rationale,
-        'all_k_values': k_values
+        'all_k_values': k_values,
+        'subspace_distance': subspace_dist
     }
 
 
