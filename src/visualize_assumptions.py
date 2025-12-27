@@ -1,3 +1,4 @@
+# Line 97 和 251 的修正版本已經包含在下面
 """
 Visualization Tools for Noise Analysis and Assumption Validation.
 
@@ -93,8 +94,9 @@ def plot_histogram(residuals_flat, save_path=None):
     # Fit and plot normal distribution
     mu, sigma = np.mean(residuals_sample), np.std(residuals_sample)
     x = np.linspace(residuals_sample.min(), residuals_sample.max(), 1000)
+    # FIX: Use raw string to avoid SyntaxWarning
     ax.plot(x, stats.norm.pdf(x, mu, sigma), 'r-', linewidth=2, 
-            label=f'Normal fit\n($\mu={mu:.4f}$, $\sigma={sigma:.4f}$)')
+            label=rf'Normal fit\n($\mu={mu:.4f}$, $\sigma={sigma:.4f}$)')
     
     ax.set_title('Histogram of Residuals with Normal Distribution Overlay', 
                  fontsize=14, fontweight='bold')
@@ -247,8 +249,9 @@ def plot_residual_diagnostics(residuals, residuals_flat, max_lags=50, save_dir='
     
     mu, sigma = np.mean(residuals_sample), np.std(residuals_sample)
     x = np.linspace(residuals_sample.min(), residuals_sample.max(), 1000)
+    # FIX: Use raw string to avoid SyntaxWarning
     ax2.plot(x, stats.norm.pdf(x, mu, sigma), 'r-', linewidth=2, 
-             label=f'Normal($\mu={mu:.3f}$, $\sigma={sigma:.3f}$)')
+             label=rf'Normal($\mu={mu:.3f}$, $\sigma={sigma:.3f}$)')
     
     ax2.set_title('Histogram with Normal Fit', fontsize=12, fontweight='bold')
     ax2.set_xlabel('Residual Value')
