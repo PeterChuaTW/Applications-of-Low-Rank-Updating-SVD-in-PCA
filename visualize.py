@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from incremental_pca import IncrementalPCA
 from batch_pca import BatchPCA
-from data_loader import load_orl_faces, reshape_to_image
+from data_loader import load_orl_faces, reshape_to_image, normalize_faces
 
 
 def visualize_explained_variance(inc_pca, batch_pca, n_components=50):
@@ -173,36 +173,46 @@ def main():
     print("Incremental PCA Visualization")
     print("="*60)
     
-    # Load data
+    # Load data - FIXED: handle 3 return values
     print("\n1. Loading data...")
-    faces, labels = load_orl_faces('data/ORL_Faces')
+    faces, labels, is_real = load_orl_faces('data/ORL_Faces')
+    
+    if not is_real:
+        print("   ⚠️  WARNING: Using synthetic data for demonstration")
+    else:
+        print("   ✅ Using REAL ORL Face Database")
+    
     print(f"   Loaded {len(faces)} face images")
+    
+    # Mean Centering (REQUIRED for PCA)
+    print("\n2. Preprocessing: Mean Centering...")
+    centered_faces, mean_face = normalize_faces(faces)
     
     # Set parameters
     n_components = 50
     batch_size = 10
     
-    print(f"\n2. Training PCA models...")
+    print(f"\n3. Training PCA models...")
     print(f"   Components: {n_components}")
     print(f"   Batch size: {batch_size}")
     
-    # Train incremental PCA
+    # Train incremental PCA - FIXED: use centered_faces
     inc_pca = IncrementalPCA(n_components=n_components)
-    for i in range(0, len(faces), batch_size):
-        inc_pca.partial_fit(faces[i:i+batch_size])
+    for i in range(0, len(centered_faces), batch_size):
+        inc_pca.partial_fit(centered_faces[i:i+batch_size])
     print("   ✓ Incremental PCA trained")
     
-    # Train batch PCA
+    # Train batch PCA - FIXED: use centered_faces
     batch_pca = BatchPCA(n_components=n_components)
-    batch_pca.fit(faces)
+    batch_pca.fit(centered_faces)
     print("   ✓ Batch PCA trained")
     
-    # Create visualizations
-    print("\n3. Creating visualizations...")
+    # Create visualizations - FIXED: use centered_faces
+    print("\n4. Creating visualizations...")
     
     visualize_explained_variance(inc_pca, batch_pca, n_components)
     visualize_principal_components(inc_pca, batch_pca, n_display=5)
-    visualize_reconstructions(faces, inc_pca, batch_pca, n_display=5)
+    visualize_reconstructions(centered_faces, inc_pca, batch_pca, n_display=5)
     
     print("\n" + "="*60)
     print("Visualization complete!")
