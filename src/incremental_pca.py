@@ -120,9 +120,9 @@ class IncrementalPCA:
         Algorithm (Brand 2006):
         1. Project new data onto current basis: w = V^T @ X_new^T
         2. Compute residual: p = X_new^T - V @ w
-        3. Orthonormalize residual: m, r = qr(p)
+        3. Orthonormalize residual: Q, R = qr(p)
         4. Form augmented matrix K and compute its SVD
-        5. Update U, Sigma, V using rotation matrices
+        5. Update V using rotation matrix U_K (left singular vectors of K)
         
         Parameters:
         -----------
@@ -147,43 +147,44 @@ class IncrementalPCA:
         S = self.singular_values_  # Shape: (k,)
         
         # Step 1: Project new data onto current principal components
-        # Brand's notation: w = U^T @ c, but in PCA context:
         # w = projection coefficients of X_new onto current basis V
         w = X_new @ V  # Shape: (m, k)
         
         # Step 2: Compute residual (part of X_new not captured by current PCs)
-        # Brand's notation: p = c - U @ w
         p = X_new - w @ V.T  # Shape: (m, n_features)
         
         # Step 3: QR decomposition of residual's transpose
-        # This is equivalent to Brand's normalized residual: m = p / ||p||
-        # QR gives us an orthonormal basis (m) and the norms (r)
+        # QR gives us an orthonormal basis (Q) and the norms (R)
         # Note: We transpose p because QR expects (n_features, m)
-        m_basis, r = np.linalg.qr(p.T, mode='reduced')  # m_basis: (n_features, j), r: (j, m)
-        j = m_basis.shape[1]  # Number of new basis vectors
+        Q, R = np.linalg.qr(p.T, mode='reduced')  # Q: (n_features, j), R: (j, m)
+        j = Q.shape[1]  # Number of new basis vectors
         
         # Step 4: Construct augmented core matrix K
-        # K represents the data in the augmented space [V, m_basis]
+        # K represents the data in the augmented space [V, Q]
         # K = [diag(S)   w^T  ]
-        #     [  0        r   ]
+        #     [  0        R   ]
         # Shape: (k+j, k+m)
         K = np.zeros((k + j, k + m))
         K[:k, :k] = np.diag(S)  # Old singular values
         K[:k, k:] = w.T         # Projection of new data
-        K[k:, k:] = r           # Residual norms
+        K[k:, k:] = R           # Residual norms
         
         # Step 5: SVD of core matrix K (much smaller than original data!)
         # This is the key efficiency gain: K is (k+j) x (k+m), not n x N
-        _, S_new, Vt_K = np.linalg.svd(K, full_matrices=False)
+        # CRITICAL: We need U_K (left singular vectors) for feature space rotation
+        U_K, S_new, _ = np.linalg.svd(K, full_matrices=False)
         
         # Step 6: Update principal components
-        # New basis is a rotation of the augmented basis [V, m_basis]
-        # V_new^T = Vt_K @ [V^T; m_basis^T]
-        V_aug = np.vstack([V.T, m_basis.T])  # Shape: (k+j, n_features)
+        # Mathematical formula: V_new = [V, Q] @ U_K
+        # Since self.components_ stores V^T, we compute: V_new^T = U_K^T @ [V^T; Q^T]
         
-        # Select top k_new components
+        # Build augmented V matrix: [V, Q]^T
+        V_aug = np.vstack([V.T, Q.T])  # Shape: (k+j, n_features)
+        
+        # Rotate the augmented basis using U_K (NOT Vt_K!)
+        # This is where the previous bug was: using Vt_K caused random noise
         k_new = min(self.n_components, len(S_new)) if self.n_components else len(S_new)
-        components_new = Vt_K[:k_new, :k+j] @ V_aug  # Shape: (k_new, n_features)
+        components_new = U_K[:, :k_new].T @ V_aug  # Shape: (k_new, n_features)
         
         # Update stored values
         self.components_ = components_new
