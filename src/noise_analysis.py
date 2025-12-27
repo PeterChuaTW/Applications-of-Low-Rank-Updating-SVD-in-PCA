@@ -225,10 +225,20 @@ def check_white_noise(residuals, max_lags=50):
     # Tests if any of a group of autocorrelations are different from zero
     try:
         from statsmodels.stats.diagnostic import acorr_ljungbox
-        lb_result = acorr_ljungbox(residuals_sample, lags=min(20, max_lags), return_df=False)
-        # lb_result is (lb_stat, p_values)
+        lb_result = acorr_ljungbox(residuals_sample, lags=min(20, max_lags), return_df=True)
+        
+        # lb_result is a DataFrame with columns: 'lb_stat' and 'lb_pvalue'
         # Take minimum p-value (most conservative)
-        lb_p = np.min(lb_result[1]) if len(lb_result[1]) > 0 else 1.0
+        if hasattr(lb_result, 'lb_pvalue'):
+            # New API (statsmodels >= 0.12)
+            lb_p = np.min(lb_result['lb_pvalue'].values)
+        elif 'lb_pvalue' in lb_result.columns:
+            # Alternative column name
+            lb_p = np.min(lb_result['lb_pvalue'].values)
+        else:
+            # Fallback: try to get p-values from any column
+            lb_p = np.min(lb_result.iloc[:, 1].values)  # Second column usually contains p-values
+        
         results['ljung_box_p'] = lb_p
         results['ljung_box_available'] = True
     except ImportError:
@@ -240,6 +250,14 @@ def check_white_noise(residuals, max_lags=50):
         results['ljung_box_p'] = 1.0 if significant_lags < 3 else 0.01
         results['ljung_box_available'] = False
         warnings.warn("statsmodels not available, using simplified white noise test")
+    except Exception as e:
+        # Generic error fallback
+        warnings.warn(f"Ljung-Box test failed: {e}. Using simplified test.")
+        n = len(residuals_sample)
+        conf_bound = 1.96 / np.sqrt(n)
+        significant_lags = np.sum(np.abs(acf[1:]) > conf_bound)
+        results['ljung_box_p'] = 1.0 if significant_lags < 3 else 0.01
+        results['ljung_box_available'] = False
     
     # Count significant autocorrelations
     n = len(residuals_sample)
