@@ -14,7 +14,7 @@ The implementation processes the ORL Face Database (400 images, 92×112 pixels) 
 
 - ✅ **Brand's Algorithm**: Efficient low-rank SVD updating for incremental PCA
 - ✅ **NumPy-based**: All matrix operations use NumPy for performance
-- ✅ **Automatic Download**: ORL Face Database downloaded automatically if not present
+- ✅ **Automatic Download**: ORL Face Database downloaded automatically with backup options
 - ✅ **Data Verification**: Built-in verification to ensure data quality
 - ✅ **Reconstruction Error**: Calculate and compare reconstruction quality
 - ✅ **Performance Benchmarking**: Compare timing and efficiency
@@ -110,7 +110,7 @@ batch_pca.fit(centered_faces)
 │   ├── incremental_pca.py    # Incremental PCA with Brand's algorithm
 │   ├── batch_pca.py          # Standard batch PCA
 │   ├── utils.py              # Utilities for benchmarking and error calculation
-│   └── data_loader.py        # ORL Face Database loading utilities with auto-download
+│   └── data_loader.py        # ORL Face Database loading with auto-download
 ├── data/
 │   ├── README.md             # Data directory documentation
 │   └── ORL_Faces/            # ORL Face Database (auto-downloaded)
@@ -155,25 +155,44 @@ The ORL (Olivetti Research Laboratory) Face Database contains:
 - 10 images per subject
 - 92×112 pixels per image (grayscale)
 
-### Automatic Download
+### Automatic Download with Backup
 
-**New Feature**: The database is now downloaded automatically!
+**New Feature**: The database is now downloaded automatically with multiple fallback options! 🎉
 
 When you run the code for the first time, it will:
-1. Check if `data/ORL_Faces/` exists
-2. If not, download from official AT&T archive
+1. **Method 1**: Try to download from official AT&T archive
+2. **Method 2**: If that fails, automatically fall back to Google Drive backup
 3. Extract and verify the database
 4. Clean up temporary files
 
-No manual download needed! 🎉
+**No manual download needed!**
+
+### Download Methods
+
+The automatic download system tries these sources in order:
+
+1. **Official Source** (Primary):
+   - https://www.cl.cam.ac.uk/Research/DTG/attarchive/pub/data/att_faces.zip
+   - Direct download from AT&T Laboratories Cambridge
+
+2. **Google Drive Backup** (Fallback):
+   - Public folder maintained by the project team
+   - Automatically used if official source is unavailable
+   - Uses `gdown` package for reliable downloads
 
 ### Manual Download (Optional)
 
-If automatic download fails, you can manually download:
+If both automatic methods fail, you can manually download:
 
+**Option 1 - Official Source**:
 1. Visit: https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
 2. Download `att_faces.zip`
 3. Extract to `data/ORL_Faces/`
+
+**Option 2 - Google Drive**:
+1. Visit: https://drive.google.com/drive/folders/1c3cOMdfy0jkCTWHFhIesLCKb9t57rywa
+2. Download the entire folder
+3. Place contents in `data/ORL_Faces/`
 
 ### Expected Directory Structure
 
@@ -275,6 +294,14 @@ Performance Comparison:
 - NumPy >= 1.21.0
 - Matplotlib >= 3.3.0 (for visualization)
 - Pillow >= 8.0.0 (for image loading)
+- gdown >= 4.6.0 (for Google Drive backup download)
+
+## New in Version 2.1
+
+- ✅ **Google Drive backup download** (automatic fallback if official source fails)
+- ✅ **Dual download methods** (official source + backup)
+- ✅ **Improved download reliability**
+- ✅ **gdown integration** for robust Google Drive downloads
 
 ## New in Version 2.0
 
