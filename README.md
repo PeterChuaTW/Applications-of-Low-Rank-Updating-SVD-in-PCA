@@ -328,6 +328,6 @@ MIT License - see LICENSE file for details
 
 National Cheng Kung University (NCKU)
 - 蔡宇德 (Chua Yee Teck)
-- 陳柏諾 (Chen Po-Yu)
+- 陳柏諭 (Chen Po-Yu)
 - 鄭丞佑 (Cheng Cheng-Yu)
 - 陳柏任 (Chen Po-Jen)
