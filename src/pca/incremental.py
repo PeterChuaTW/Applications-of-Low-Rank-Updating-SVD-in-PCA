@@ -23,11 +23,18 @@ class IncrementalPCA:
         self,
         n_components=None,
         batch_size=None,
-        rank_strategy=None
+        rank_strategy=None,
+        energy_threshold=None,
+        rank_update_interval=None
     ):
         self.n_components = n_components
         self.batch_size = batch_size
         self.rank_strategy = rank_strategy
+
+        # 🔥 新增（一定要有）
+        self.energy_threshold = energy_threshold
+        self.rank_update_interval = rank_update_interval
+        self._rank_update_counter = 0
 
         self.mean_ = None
         self.n_samples_seen_ = 0
@@ -219,7 +226,29 @@ class IncrementalPCA:
         # Update stored values
         self.components_ = components_new
         self.singular_values_ = S_new[:k_new]
-        
+        # =========================
+        # Auto-rank selection (energy-based)
+        # =========================
+        if self.rank_strategy == "energy":
+
+            self._rank_update_counter += 1
+
+            # Decide whether to update rank
+            should_update = (
+                self.n_components is None or
+                (self.rank_update_interval is not None and
+                self._rank_update_counter % self.rank_update_interval == 0)
+            )
+
+            if should_update and self.energy_threshold is not None:
+                energy = np.cumsum(self.singular_values_**2) / np.sum(self.singular_values_**2)
+                new_k = np.searchsorted(energy, self.energy_threshold) + 1
+
+                self.n_components = new_k
+                self.rank_history_.append(new_k)
+
+
+
     def transform(self, X):
         """
         Transform data to principal component space.
