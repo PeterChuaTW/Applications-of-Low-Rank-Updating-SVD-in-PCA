@@ -19,21 +19,19 @@ class IncrementalPCA:
     We store the singular vectors of X^T @ X (covariance matrix).
     """
     
-    def __init__(self, n_components=None):
-        """
-        Initialize the Incremental PCA model.
-        
-        Parameters:
-        -----------
-        n_components : int, optional
-            Number of principal components to keep. If None, all components are kept.
-        """
+    def __init__(
+        self,
+        n_components=None,
+        batch_size=None,
+        rank_strategy=None
+    ):
         self.n_components = n_components
+        self.batch_size = batch_size
+        self.rank_strategy = rank_strategy
+
         self.mean_ = None
-        self.components_ = None  # Principal components (k, n_features)
-        self.singular_values_ = None  # Singular values
         self.n_samples_seen_ = 0
-        self.total_variance_ = None  # Total variance (for explained_variance_ratio)
+        self.rank_history_ = []
         
     def fit(self, X):
         """
@@ -78,37 +76,69 @@ class IncrementalPCA:
         
     def partial_fit(self, X):
         """
-        Incrementally fit the model with new data using Brand's algorithm.
-        
+        Incrementally fit the model with new data using Brand's algorithm
+        with adaptive rank selection.
+
         Parameters:
         -----------
         X : array-like, shape (n_samples, n_features)
-            New data to incrementally fit
+        New data to incrementally fit
         """
         X = np.array(X, dtype=np.float64)
-        
+
         if self.mean_ is None:
             # First time seeing data
             return self.fit(X)
             
         n_new_samples, n_features = X.shape
         n_total = self.n_samples_seen_ + n_new_samples
-        
-        # CRITICAL FIX: Compute new global mean FIRST
-        # All data must be centered with the same mean for SVD math to work
+
+        # ------------------------------------------------------------------
+        # Step 1: Update global mean (CRITICAL)
+        # ------------------------------------------------------------------
         new_mean = (self.n_samples_seen_ * self.mean_ + np.sum(X, axis=0)) / n_total
-        
-        # Center new data with NEW global mean (not old mean!)
+
+        # Center new data using the NEW global mean
         X_centered = X - new_mean
-        
-        # Apply Brand's algorithm for SVD updating
+
+        # ------------------------------------------------------------------
+        # Step 2: Brand SVD update
+        # ------------------------------------------------------------------
         self._brand_update(X_centered)
-        
-        # Update mean and sample count
+
+        # ------------------------------------------------------------------
+        # Step 3: Adaptive rank selection (NEW)
+        # ------------------------------------------------------------------
+        if getattr(self, "rank_strategy", None) == "auto":
+            from src.rank.selection import compare_all_rank_methods
+
+            results = compare_all_rank_methods(
+                X_centered,
+                thresholds=(0.90, 0.95, 0.99)
+            )
+
+            # Use median consensus as primary recommendation
+            k = int(np.median([
+                m["n_components"]
+                for m in results["energy_methods"].values()
+            ]))
+
+            # Truncate PCA components
+            self.components_ = self.components_[:k]
+            self.singular_values_ = self.singular_values_[:k]
+
+            # If you store Vt_ or explained_variance_, truncate them as well
+            if hasattr(self, "Vt_"):
+                self.Vt_ = self.Vt_[:k]
+
+        # ------------------------------------------------------------------
+        # Step 4: Update mean and sample count
+        # ------------------------------------------------------------------
         self.mean_ = new_mean
         self.n_samples_seen_ = n_total
-        
+
         return self
+
         
     def _brand_update(self, X_new):
         """
