@@ -1,134 +1,110 @@
-Applications of Low-Rank Updating SVD in PCA
-================================================
+# Applications of Low-Rank Updating SVD in PCA
 
-A Python implementation of Incremental PCA using Brand's low-rank SVD updating algorithm,
-with comprehensive comparison against Batch PCA and a consensus-based automatic rank
-selection framework.
+A Python implementation of **Incremental PCA** using **Brand's low-rank SVD updating algorithm**, with comprehensive comparison against Batch PCA and multiple rank selection strategies.
 
-------------------------------------------------
-Overview
-------------------------------------------------
+---
+
+## Overview
 
 This project implements and compares:
 
-1. Incremental PCA (Brand, 2006)
-   An efficient PCA method that updates the model as new data arrives using low-rank SVD updates.
+1. **Incremental PCA** (Brand, 2006)  
+   Efficiently updates the PCA model when new data arrives using low-rank SVD updates.
 
-2. Batch PCA
-   The classical PCA approach computed on the entire dataset at once.
+2. **Batch PCA**  
+   Standard PCA computed on the entire dataset at once.
 
-A major focus of this project is **automatic rank selection (auto rank)**,
-designed to avoid manual tuning of the PCA dimension.
+We use the **ORL Face Database** (400 grayscale face images, 92×112 pixels) and report:
 
-Experiments are conducted on the ORL Face Database (400 grayscale images, 92×112 pixels).
-We report:
+- performance benchmark (fit/transform speed)
+- reconstruction quality metrics
+- rank selection comparison (6 methods)
+- diagnostic plots and consensus analysis
 
-- Performance benchmarks (fit / transform speed)
-- Reconstruction quality metrics
-- Automatic rank selection behavior
-- Cross-method rank consensus analysis
-- Diagnostic plots for model validation
+---
 
-------------------------------------------------
-Auto Rank Selection (Consensus-Based)
-------------------------------------------------
+## Features
 
-Determining the appropriate PCA rank is a critical yet often manual step in practice.
-To address this, this project implements a **consensus-based automatic rank selection framework**.
+- ✅ Brand’s low-rank SVD update algorithm
+- ✅ Batch PCA baseline implementation
+- ✅ 6 different rank selection methods (Energy / Gavish-Donoho / Kneedle / L-method)
+- ✅ Noise assumption diagnostics for Gavish-Donoho
+- ✅ Automatic ORL dataset download with fallback
+- ✅ Visualization tools (rank plots, residual diagnostics, eigenfaces, reconstructions)
+- ✅ Modern dependency management with **uv + pyproject.toml**
 
-We evaluate **six rank selection criteria**, including:
+---
 
-- Energy threshold methods
-- Gavish–Donoho optimal hard threshold
-- Elbow-based approaches (Kneedle, L-method)
-- Noise diagnostics–aware strategies
+## Installation (uv)
 
-Rather than relying on a single heuristic, we perform **cross-method comparison and
-consensus analysis** to examine:
+> This project uses **uv** instead of `requirements.txt`.
 
-- Stability of selected ranks
-- Agreement and disagreement between criteria
-- Sensitivity to noise assumptions
+### 1) Install uv
 
-This design reflects realistic scenarios where the intrinsic data dimension is unknown
-and must be inferred automatically from observations.
-
-------------------------------------------------
-Features
-------------------------------------------------
-
-- Brand’s low-rank SVD update algorithm
-- Batch PCA baseline implementation
-- Consensus-based automatic rank selection using six criteria
-- Noise assumption diagnostics for Gavish–Donoho
-- Automatic ORL dataset download with synthetic fallback
-- Visualization tools:
-  rank comparison plots, rank consensus analysis,
-  residual diagnostics, eigenfaces, and reconstructions
-- Modern dependency management using uv and pyproject.toml
-
-------------------------------------------------
-Installation (uv)
-------------------------------------------------
-
-This project uses uv instead of requirements.txt.
-
-1) Install uv
-
+```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-or (macOS with Homebrew):
+or macOS (Homebrew):
 
+```bash
 brew install uv
+```
 
-2) Create environment and install dependencies
+### 2) Create environment + install dependencies
 
+```bash
 uv sync
+```
 
-------------------------------------------------
-Quick Start
-------------------------------------------------
+---
 
-Run the full experimental pipeline:
+## Quick Start
 
+Run the full pipeline:
+
+```bash
 uv run python main.py
+```
 
 This will:
 
-1. Download the ORL dataset (or fall back to synthetic data)
-2. Preprocess images (mean centering and normalization)
-3. Validate Gavish–Donoho noise assumptions
-4. Perform automatic rank selection and consensus analysis
-5. Compare Incremental PCA versus Batch PCA
-6. Save all diagnostic plots into the output/ directory
+1. Download ORL dataset (or fall back to synthetic data)
+2. Preprocess (mean centering)
+3. Validate Gavish-Donoho assumptions
+4. Compare **6 rank selection methods**
+5. Run **Incremental PCA vs Batch PCA**
+6. Save diagnostic plots into `output/`
 
-------------------------------------------------
-Verify Dataset
-------------------------------------------------
+---
 
+## Verify Dataset
+
+```bash
 uv run python verify_data.py
+```
 
-------------------------------------------------
-Outputs
-------------------------------------------------
+---
 
-After running main.py, results are saved under:
+## Outputs
 
+After running `main.py`, outputs will be saved under:
+
+```
 output/
 ├── residual_diagnostics.png
 ├── scree_plot_with_elbows.png
 ├── rank_method_comparison.png
 └── rank_consensus.png
+```
 
-Note:
-The output/ directory and data/ORL_Faces/ are excluded from Git tracking via .gitignore.
+> Note: `output/` and `data/ORL_Faces/` are excluded from Git tracking via `.gitignore`.
 
-------------------------------------------------
-Using the API
-------------------------------------------------
+---
 
-Example usage:
+## Using the API
 
+```python
 from src.pca.incremental import IncrementalPCA
 from src.pca.batch import BatchPCA
 from src.data.loader import load_orl_faces
@@ -146,52 +122,54 @@ X_rec = inc.inverse_transform(Z)
 
 batch = BatchPCA(n_components=50)
 batch.fit(X)
+```
 
-------------------------------------------------
-Project Structure
-------------------------------------------------
+---
 
+## Project Structure
+
+```
 .
 ├── src/
-│   ├── pca/                 IncrementalPCA and BatchPCA implementations
-│   ├── data/                Dataset loader and preprocessing
-│   ├── rank/                Rank selection methods and consensus logic
-│   ├── diagnostics/         Noise and assumption diagnostics
-│   ├── visualization/       Plotting utilities
-│   ├── experiments/         Main pipeline and experiments
+│   ├── pca/                 # IncrementalPCA + BatchPCA implementations
+│   ├── data/                # Dataset loader + preprocessing
+│   ├── rank/                # Rank selection methods (energy, elbow, GD, etc.)
+│   ├── diagnostics/         # Noise / assumption validation diagnostics
+│   ├── visualization/       # Plotting utilities
+│   ├── experiments/         # Main pipeline + experiments
 │   └── __init__.py
-├── docs/                    References and ORL usage guide
-├── main.py                  Entry point
+├── docs/                    # References + ORL usage guide
+├── main.py                  # Lightweight entrypoint
 ├── verify_data.py
 ├── test_incremental_pca.py
 ├── pyproject.toml
 └── README.md
+```
 
-------------------------------------------------
-References
-------------------------------------------------
+---
 
-1. Brand, M. (2006).
-   Fast low-rank modifications of the thin singular value decomposition.
+## References
+
+1. Brand, M. (2006).  
+   _Fast low-rank modifications of the thin singular value decomposition._  
    Linear Algebra and its Applications, 415(1), 20–30.
 
-2. Gavish, M., and Donoho, D. (2014).
-   The optimal hard threshold for singular values is 4/sqrt(3).
+2. Gavish, M., & Donoho, D. (2014).  
+   _The optimal hard threshold for singular values is 4/√3._  
    IEEE Transactions on Information Theory, 60(8), 5040–5053.
 
-3. ORL Face Database
+3. ORL Face Database  
    https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
 
-------------------------------------------------
-License
-------------------------------------------------
+---
 
-MIT License.
-See the LICENSE file for details.
+## License
 
-------------------------------------------------
-Authors
-------------------------------------------------
+MIT License - see LICENSE file.
+
+---
+
+## Authors
 
 **Numerical Analysis Final Project**  
 National Cheng Kung University (NCKU)
