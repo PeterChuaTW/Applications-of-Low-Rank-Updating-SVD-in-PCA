@@ -9,7 +9,7 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from data_loader import load_orl_faces
+from src.data.loader import load_orl_faces
 import numpy as np
 
 

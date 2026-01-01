@@ -209,3 +209,8 @@ __marimo__/
 # Generated visualizations
 *.png
 !docs/*.png
+
+# Project artifacts / datasets
+data/ORL_Faces/
+output/
+.python-version

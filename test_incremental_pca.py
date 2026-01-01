@@ -8,8 +8,8 @@ import os
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from incremental_pca import IncrementalPCA
-from batch_pca import BatchPCA
+from src.pca.incremental import IncrementalPCA
+from src.pca.batch import BatchPCA
 from utils import reconstruction_error, normalized_reconstruction_error
 
 
