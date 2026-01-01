@@ -1,0 +1,16 @@
+[project]
+name = "applications-of-low-rank-updating-svd-in-pca"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "gdown>=4.6.0",
+    "matplotlib>=3.3.0",
+    "numpy>=1.21.0",
+    "pillow>=8.0.0",
+    "scipy>=1.16.3",
+]
+
+[tool.uv]
+package = true
