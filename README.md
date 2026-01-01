@@ -1,37 +1,78 @@
 # Applications of Low-Rank Updating SVD in PCA
 
-A Python implementation of **Incremental PCA** using **Brand's low-rank SVD updating algorithm**, with comprehensive comparison against Batch PCA and multiple rank selection strategies.
+A Python implementation of **Incremental PCA** using **Brand’s low-rank SVD updating algorithm**, with comprehensive comparison against Batch PCA and an **automatic rank selection framework** based on **multi-method consensus** (energy thresholds, elbow detection, and statistical thresholding).
+
 
 ---
 
 ## Overview
 
-This project implements and compares:
+This project implements and compares two PCA approaches:
 
-1. **Incremental PCA** (Brand, 2006)  
-   Efficiently updates the PCA model when new data arrives using low-rank SVD updates.
+1. **Incremental PCA (Brand, 2006)**  
+   Efficiently updates the PCA model as new data arrives via low-rank SVD updates.
 
 2. **Batch PCA**  
-   Standard PCA computed on the entire dataset at once.
+   Computes PCA on the full dataset in a single pass as a baseline reference.
 
-We use the **ORL Face Database** (400 grayscale face images, 92×112 pixels) and report:
+A central contribution of this project is **automatic rank selection (auto-rank)** —  
+designed to eliminate the need for manual tuning of the PCA dimensionality in practice.
 
-- performance benchmark (fit/transform speed)
-- reconstruction quality metrics
-- rank selection comparison (6 methods)
-- diagnostic plots and consensus analysis
+Experiments are conducted on the **ORL Face Database**
+(400 grayscale images, 92×112 pixels), and we report:
+
+- **Performance benchmarking** (fit / transform runtime)
+- **Reconstruction quality metrics** (error, normalized error, MSE)
+- **Auto-rank selection outcomes** across multiple criteria
+- **Cross-method consensus analysis** (agreement vs disagreement)
+- **Diagnostic visualizations** for statistical assumption validation
 
 ---
 
+## Auto Rank Selection (Consensus-Based)
+
+Choosing the number of principal components (**rank k**) is a critical step in PCA,
+yet it is often selected manually using ad hoc heuristics.
+To address this, we implement a **consensus-based automatic rank selection framework**
+that estimates an appropriate rank directly from data.
+
+We evaluate **six complementary rank selection criteria**, including:
+
+- **Cumulative energy thresholds** (e.g., 90%, 95%, 99%)
+- **Gavish–Donoho optimal hard threshold** (random matrix theory)
+- **Elbow-based detection methods** (Kneedle, L-method)
+- **Noise-aware diagnostics and validation**
+
+Rather than relying on a single heuristic, we perform **cross-method comparison and
+consensus analysis** to study:
+
+- **Stability** of selected ranks across criteria
+- **Agreement / disagreement** between empirical, geometric, and statistical methods
+- **Sensitivity to noise-model assumptions**, especially for Gavish–Donoho thresholding
+
+This framework reflects realistic scenarios in which the intrinsic data dimension is unknown
+and must be inferred automatically from observations — especially in online or streaming settings.
+
+
+---
+
+
 ## Features
 
-- ✅ Brand’s low-rank SVD update algorithm
-- ✅ Batch PCA baseline implementation
-- ✅ 6 different rank selection methods (Energy / Gavish-Donoho / Kneedle / L-method)
-- ✅ Noise assumption diagnostics for Gavish-Donoho
-- ✅ Automatic ORL dataset download with fallback
-- ✅ Visualization tools (rank plots, residual diagnostics, eigenfaces, reconstructions)
-- ✅ Modern dependency management with **uv + pyproject.toml**
+- **Brand’s low-rank SVD updating algorithm** for efficient Incremental PCA
+- **Batch PCA baseline** for accuracy and performance comparison
+- **Consensus-based automatic rank selection (auto-rank)** using six criteria:
+  - energy thresholds (90% / 95% / 99%)
+  - Gavish–Donoho optimal hard threshold (RMT)
+  - elbow-based methods (Kneedle, L-method)
+- **Noise assumption diagnostics** for validating Gavish–Donoho applicability
+- **Automatic ORL dataset download** with robust fallbacks (official + Google Drive + synthetic)
+- **Visualization suite**, including:
+  - rank comparison plots and consensus analysis  
+  - residual diagnostic plots (histogram / Q–Q / ACF)  
+  - eigenfaces and reconstruction results
+- Modern dependency management using **uv + pyproject.toml**
+
 
 ---
 
@@ -69,12 +110,13 @@ uv run python main.py
 
 This will:
 
-1. Download ORL dataset (or fall back to synthetic data)
-2. Preprocess (mean centering)
-3. Validate Gavish-Donoho assumptions
-4. Compare **6 rank selection methods**
-5. Run **Incremental PCA vs Batch PCA**
-6. Save diagnostic plots into `output/`
+1. **Download** the ORL dataset (or fall back to synthetic data)
+2. **Preprocess** the images (mean centering)
+3. **Validate** Gavish–Donoho noise assumptions (diagnostics + plots)
+4. **Perform auto-rank selection** using six criteria and run **consensus analysis**
+5. **Compare** Incremental PCA versus Batch PCA (runtime + reconstruction error)
+6. **Save** all diagnostic plots and rank-selection figures into `output/`
+
 
 ---
 
