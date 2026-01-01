@@ -16,10 +16,11 @@ import argparse
 # Add src to path
 sys.path.insert(0, 'src')
 
-from incremental_pca import IncrementalPCA
-from batch_pca import BatchPCA
-from data_loader import load_orl_faces, normalize_faces
-from rank_selection import determine_n_components_by_energy
+from src.pca.batch import BatchPCA
+from src.pca.incremental import IncrementalPCA
+from src.data.loader import load_orl_faces
+from src.data.preprocess import normalize_faces
+from src.rank.selection import determine_n_components_by_energy
 
 
 def visualize_explained_variance(inc_pca, batch_pca, n_components_used, save_path='explained_variance.png'):
