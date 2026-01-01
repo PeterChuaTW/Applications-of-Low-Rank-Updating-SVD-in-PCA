@@ -214,3 +214,6 @@ __marimo__/
 data/ORL_Faces/
 output/
 .python-version
+
+# macOS
+.DS_Store
